@@ -75,6 +75,13 @@ class Scene (
     this["ks"]?.set(Vec3(0.8f, 0.8f, 0.8f))
     this["shininess"]?.set(60f)
   }
+  val bumperMaterial = Material(texturedProgram).apply {
+    this["colorTexture"]?.set(Texture2D(gl, "media/bumper.png"))
+    this["ks"]?.set(Vec3(0.7f, 0.7f, 0.7f))
+    this["shininess"]?.set(50f)
+  }
+  // the side uses the striped top strip of bumper.png, the cap its center
+  val bumperGeometry = CylinderGeometry(gl, sideTexHeight = 0.3f)
   val heliMaterial = Material(texturedProgram).apply {
     this["colorTexture"]?.set(Texture2D(gl, "media/json/json/heli/heli.png"))
     this["ks"]?.set(Vec3(0.5f, 0.5f, 0.5f))
@@ -95,12 +102,25 @@ class Scene (
   }
   // ground level: the bottom of the chevy's wheels
   val groundY = -11.5f
+  val trackHalfSize = 400f // 40 tiles of 20
   val track = GameObject(Mesh(trackMaterial, TrackGeometry(gl, 40, 40, 20f))).apply {
     position.set(0f, groundY, 0f)
   }
   init {
     gameObjects.add(track)
     gameObjects.add(chassis)
+    // bumpers along the four edges of the track
+    val edge = trackHalfSize - 10f
+    var along = -trackHalfSize + 25f
+    while (along < trackHalfSize) {
+      for ((x, z) in listOf(Pair(along, edge), Pair(along, -edge), Pair(edge, along), Pair(-edge, along))) {
+        gameObjects += Bumper(6f, 10f, groundY, Mesh(bumperMaterial, bumperGeometry)).apply {
+          position.x = x
+          position.z = z
+        }
+      }
+      along += 50f
+    }
     // rollers, resting on the track
     for ((x, z) in listOf(Pair(0f, -25f), Pair(12f, -18f), Pair(-12f, -18f),
                           Pair(45f, -60f), Pair(-45f, -60f), Pair(0f, -120f))) {
@@ -110,11 +130,11 @@ class Scene (
       }
     }
     // wheel positions in chassis model space; tweak if they look off
+    // front axle at z = 14, rear at z = -11 (chassis.wheelBase apart); front wheels steer
     for ((x, z) in listOf(Pair(7f, 14f), Pair(-7f, 14f), Pair(7f, -11f), Pair(-7f, -11f))) {
-      gameObjects += GameObject(*chevyWheelGeometries.map { Mesh(chevyMaterial, it) }.toTypedArray()).apply {
+      gameObjects += Wheel(chassis, mirrored = x < 0f, steerable = z > 0f,
+          *chevyWheelGeometries.map { Mesh(chevyMaterial, it) }.toTypedArray()).apply {
         position.set(x, -3.5f, z)
-        if (x < 0f) yaw = PI.toFloat() // mirror so the rim faces outward
-        parent = chassis
       }
     }
     val heli = GameObject(*heliBodyGeometries.map { Mesh(heliMaterial, it) }.toTypedArray()).apply {
