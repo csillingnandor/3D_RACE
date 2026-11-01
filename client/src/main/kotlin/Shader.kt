@@ -10,7 +10,7 @@ class Shader (
   val shaderType : Int,
   val sourceUrl : String) {
 
-  val glShader = gl.createShader(shaderType) //#createShader# get an OpenGL shader ID #shaderType# vertex or fragment shader
+  val glShader = gl.createShader(shaderType)
 
   init {
     val request = XMLHttpRequest()
@@ -27,11 +27,11 @@ class Shader (
         if(marked != source) {
           errorMessage = "Shader source file ${sourceUrl} has \u001b[46mnon-ASCII\u001b[49m characters.\n\u001b[30m" + marked
         } else {
-          gl.shaderSource(glShader, source) //#shaderSource# associate source code with ID
-          gl.compileShader(glShader) //#compileShader# compile GLSL code to binary
+          gl.shaderSource(glShader, source)
+          gl.compileShader(glShader)
           if (gl.getShaderParameter(glShader, GL.COMPILE_STATUS) == false) {
             val errorPrefix = Regex("ERROR: 0")
-            errorMessage = "Shader ${sourceUrl} had compilation errors.\n${errorPrefix.replace(gl.getShaderInfoLog(glShader)?:"FAILED TO OBTAIN LOG.", request.responseURL)}" //#getShaderInfoLog# check if succeeded and get compilation error message
+            errorMessage = "Shader ${sourceUrl} had compilation errors.\n${errorPrefix.replace(gl.getShaderInfoLog(glShader)?:"FAILED TO OBTAIN LOG.", request.responseURL)}"
           }
         }
       }

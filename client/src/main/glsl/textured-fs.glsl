@@ -48,7 +48,7 @@ void main(void) {
 
   vec3 kd = texture(material.colorTexture, texCoord.xy).rgb;
 
-  vec3 radianceToEye = kd * 0.2; // ambient
+  vec3 radianceToEye = kd * 0.2;
   for(int i=0; i<1; i++){
     vec3 lightDiff = lights[i].position.xyz -
                  x * lights[i].position.w;

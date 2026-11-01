@@ -1,181 +1,150 @@
 import org.w3c.dom.HTMLCanvasElement
 import org.w3c.dom.HTMLDivElement
 import org.khronos.webgl.WebGLRenderingContext as GL
-import org.khronos.webgl.Float32Array
-import org.khronos.webgl.Uint32Array
 import vision.gears.webglmath.*
 import kotlin.js.Date
 import kotlin.math.*
-import kotlin.random.*
 
 class Scene (
   val gl : WebGL2RenderingContext,
   val overlay : HTMLDivElement,
   val canvas : HTMLCanvasElement) : UniformProvider("scene") {
 
-  lateinit var defaultFramebuffer : DefaultFramebuffer
-  // LABTODO: postProcFramebuffer
-  var frameCount = 0
-
   val vsQuad = Shader(gl, GL.VERTEX_SHADER, "quad-vs.glsl")
   val fsBackground = Shader(gl, GL.FRAGMENT_SHADER, "background-fs.glsl")
-
-  val fsShow = Shader(gl, GL.FRAGMENT_SHADER, "show-fs.glsl")
-
-  val quadGeometry = TexturedQuadGeometry(gl)
-  val flipQuadGeometry = FlipQuadGeometry(gl)
-  //LABTODO: resources for multipass rendering
-
-  val showMesh = Mesh(Material(Program(gl, vsQuad, fsShow)), flipQuadGeometry)
-
-  val backgroundProgram = Program(gl, vsQuad, fsBackground)
-  val backgroundMaterial = Material(backgroundProgram)
-  val skyCubeTexture = TextureCube(gl,
+  val backgroundMaterial = Material(Program(gl, vsQuad, fsBackground)).apply {
+    this["envTexture"]?.set(TextureCube(gl,
       "media/posx512.jpg", "media/negx512.jpg",
       "media/posy512.jpg", "media/negy512.jpg",
-      "media/posz512.jpg", "media/negz512.jpg"
-    )
-  init {
-    backgroundMaterial["envTexture"]?.set( skyCubeTexture )
+      "media/posz512.jpg", "media/negz512.jpg"))
   }
-  val backgroundMesh = Mesh(backgroundMaterial, quadGeometry)
+  val backgroundMesh = Mesh(backgroundMaterial, TexturedQuadGeometry(gl))
 
   val jsonLoader = JsonLoader()
-  val exhibitGeometries = jsonLoader.loadGeometries(gl, "media/slowpoke/Slowpoke.json")
   val chevyChassisGeometries = jsonLoader.loadGeometries(gl, "media/json/json/chevy/chassis.json")
   val chevyWheelGeometries = jsonLoader.loadGeometries(gl, "media/json/json/chevy/wheel.json")
-  val heliBodyGeometries = jsonLoader.loadGeometries(gl, "media/json/json/heli/heli1.json")
-  val heliMainRotorGeometries = jsonLoader.loadGeometries(gl, "media/json/json/heli/mainrotor.json")
-  val heliTailRotorGeometries = jsonLoader.loadGeometries(gl, "media/json/json/heli/tailrotor.json")
   val sphereGeometries = jsonLoader.loadGeometries(gl, "media/sphere.json")
 
   val vsTransform = Shader(gl, GL.VERTEX_SHADER, "transform-vs.glsl")
-  val fsPhong = Shader(gl, GL.FRAGMENT_SHADER, "phong-fs.glsl")
-  val phongProgram = Program(gl, vsTransform, fsPhong)
-  val phongMaterial = Material(phongProgram).apply {
-    this["kd"]?.set(Vec3(0.6f, 0.2f, 0.1f))
-    this["ks"]?.set(Vec3(1f, 1f, 1f))
-    this["shininess"]?.set(15f)
-  }
-
   val fsTextured = Shader(gl, GL.FRAGMENT_SHADER, "textured-fs.glsl")
   val texturedProgram = Program(gl, vsTransform, fsTextured)
-  val chevyMaterial = Material(texturedProgram).apply {
-    this["colorTexture"]?.set(Texture2D(gl, "media/json/json/chevy/chevy.png"))
-    this["ks"]?.set(Vec3(0.5f, 0.5f, 0.5f))
-    this["shininess"]?.set(40f)
-  }
-  val trackMaterial = Material(texturedProgram).apply {
-    this["colorTexture"]?.set(Texture2D(gl, "media/tile.png"))
-    this["ks"]?.set(Vec3(0.1f, 0.1f, 0.1f))
-    this["shininess"]?.set(10f)
-  }
-  val ballMaterial = Material(texturedProgram).apply {
-    this["colorTexture"]?.set(Texture2D(gl, "media/ball.png"))
-    this["ks"]?.set(Vec3(0.8f, 0.8f, 0.8f))
-    this["shininess"]?.set(60f)
-  }
-  val bumperMaterial = Material(texturedProgram).apply {
-    this["colorTexture"]?.set(Texture2D(gl, "media/bumper.png"))
-    this["ks"]?.set(Vec3(0.7f, 0.7f, 0.7f))
-    this["shininess"]?.set(50f)
-  }
-  // the side uses the striped top strip of bumper.png, the cap its center
-  val bumperGeometry = CylinderGeometry(gl, sideTexHeight = 0.3f)
-  val heliMaterial = Material(texturedProgram).apply {
-    this["colorTexture"]?.set(Texture2D(gl, "media/json/json/heli/heli.png"))
-    this["ks"]?.set(Vec3(0.5f, 0.5f, 0.5f))
-    this["shininess"]?.set(40f)
+
+  fun texturedMaterial(texture : String, specular : Float, shininess : Float) = Material(texturedProgram).apply {
+    this["colorTexture"]?.set(Texture2D(gl, texture))
+    this["ks"]?.set(Vec3(specular, specular, specular))
+    this["shininess"]?.set(shininess)
   }
 
-  val fsEnvmapped = Shader(gl, GL.FRAGMENT_SHADER, "envmapped-fs.glsl")
-  val envmappedProgram = Program(gl, vsTransform, fsEnvmapped)
-  val envmappedMaterial = Material(envmappedProgram).apply {
-    this["kr"]?.set(Vec3(0.33f, 0.33f, 0.2f))
-    this["environment"]?.set(skyCubeTexture)
-    //LABTODO: use rendered cube map
-  }
+  val chevyMaterial = texturedMaterial("media/json/json/chevy/chevy.png", 0.5f, 40f)
+  val trackMaterial = texturedMaterial("media/tile.png", 0.1f, 10f)
+  val finishMaterial = texturedMaterial("media/finish.png", 0.1f, 10f)
+  val ballMaterial = texturedMaterial("media/ball.png", 0.8f, 60f)
+  val bumperMaterial = texturedMaterial("media/bumper.png", 0.7f, 50f)
+  val railMaterial = texturedMaterial("media/rail.png", 0.9f, 80f)
+
+  val bumperGeometry = CylinderGeometry(gl, sideTexHeight = 0.3f)
+  val railGeometry = CylinderGeometry(gl)
+
+  fun meshes(geometries : List<Geometry>, material : Material) =
+    geometries.map { Mesh(material, it) }.toTypedArray()
+
+  val groundY = -11.5f
+  val track = Track(arrayOf(
+    "..............",
+    ".S............",
+    ".#............",
+    ".#............",
+    ".O............",
+    ".#............",
+    ".#............",
+    ".#####O####...",
+    "..........#...",
+    "..........#...",
+    "..........#...",
+    "..........O...",
+    "..........#...",
+    "..........#...",
+    "...########...",
+    "...#..........",
+    "...#..........",
+    "...F..........",
+    ".............."
+  ), 60f, groundY)
+  val startYaw = 0f
+
+  val bumperPlaces = listOf(Triple(2, 7, 'N'), Triple(4, 7, 'S'), Triple(9, 7, 'N'), Triple(10, 9, 'W'),
+                            Triple(10, 13, 'E'), Triple(7, 14, 'N'), Triple(5, 14, 'S'))
+  val ballPlaces = listOf(Triple(1, 6, 0f), Triple(3, 7, 8f), Triple(8, 7, -8f), Triple(10, 9, 0f), Triple(6, 14, 10f))
+  val wheelPlaces = listOf(Pair(7f, 14f), Pair(-7f, 14f), Pair(7f, -11f), Pair(-7f, -11f))
 
   val gameObjects = ArrayList<GameObject>()
-  val chassis = Avatar(*chevyChassisGeometries.map { Mesh(chevyMaterial, it) }.toTypedArray()).apply {
-    position.set(0f, -5f, -60f)
-  }
-  // ground level: the bottom of the chevy's wheels
-  val groundY = -11.5f
-  val trackHalfSize = 400f // 40 tiles of 20
-  val track = GameObject(Mesh(trackMaterial, TrackGeometry(gl, 40, 40, 20f))).apply {
-    position.set(0f, groundY, 0f)
-  }
+  val chassis = Avatar(track, *meshes(chevyChassisGeometries, chevyMaterial))
+
   init {
-    gameObjects.add(track)
-    gameObjects.add(chassis)
-    // bumpers along the four edges of the track
-    val edge = trackHalfSize - 10f
-    var along = -trackHalfSize + 25f
-    while (along < trackHalfSize) {
-      for ((x, z) in listOf(Pair(along, edge), Pair(along, -edge), Pair(edge, along), Pair(-edge, along))) {
-        gameObjects += Bumper(6f, 10f, groundY, Mesh(bumperMaterial, bumperGeometry)).apply {
-          position.x = x
-          position.z = z
+    addRoad()
+    addGuardrails()
+    addBumpers()
+    addCar()
+  }
+
+  fun addRoad() {
+    gameObjects += GameObject(Mesh(trackMaterial,
+        TrackGeometry(gl, track.cols, track.rows, track.tileSize) { i, j -> track.cell(i, j) !in "#S" })).apply {
+      position.set(0f, groundY, 0f)
+    }
+    gameObjects += GameObject(Mesh(finishMaterial,
+        TrackGeometry(gl, track.cols, track.rows, track.tileSize) { i, j -> track.cell(i, j) != 'F' })).apply {
+      position.set(0f, groundY + 0.05f, 0f)
+    }
+  }
+
+  fun addGuardrails() {
+    val railRadius = 1.2f
+    for (wall in track.walls) {
+      for (height in listOf(3.5f, 7f)) {
+        gameObjects += GameObject(Mesh(railMaterial, railGeometry)).apply {
+          scale.set(railRadius, wall.length, railRadius)
+          roll = -PI.toFloat() / 2f
+          yaw = if (wall.alongX) 0f else -PI.toFloat() / 2f
+          position.set(wall.x0 - wall.normal.x * railRadius, groundY + height, wall.z0 - wall.normal.z * railRadius)
         }
       }
-      along += 50f
     }
-    // rollers, resting on the track
-    for ((x, z) in listOf(Pair(0f, -25f), Pair(12f, -18f), Pair(-12f, -18f),
-                          Pair(45f, -60f), Pair(-45f, -60f), Pair(0f, -120f))) {
-      gameObjects += Ball(5f, groundY, *sphereGeometries.map { Mesh(ballMaterial, it) }.toTypedArray()).apply {
-        position.x = x
-        position.z = z
+    for (p in track.railPosts) {
+      gameObjects += GameObject(Mesh(railMaterial, railGeometry)).apply {
+        scale.set(1.5f, 8f, 1.5f)
+        position.set(p.x, groundY, p.z)
       }
     }
-    // wheel positions in chassis model space; tweak if they look off
-    // front axle at z = 14, rear at z = -11 (chassis.wheelBase apart); front wheels steer
-    for ((x, z) in listOf(Pair(7f, 14f), Pair(-7f, 14f), Pair(7f, -11f), Pair(-7f, -11f))) {
+  }
+
+  fun addBumpers() {
+    for ((i, j, side) in bumperPlaces) {
+      val p = track.wallMidpoint(i, j, side)
+      gameObjects += Bumper(7f, 8f, groundY, Mesh(bumperMaterial, bumperGeometry)).apply {
+        position.x = p.x
+        position.z = p.z
+      }
+    }
+  }
+
+  fun addCar() {
+    gameObjects += chassis
+    for ((x, z) in wheelPlaces) {
       gameObjects += Wheel(chassis, mirrored = x < 0f, steerable = z > 0f,
-          *chevyWheelGeometries.map { Mesh(chevyMaterial, it) }.toTypedArray()).apply {
+          *meshes(chevyWheelGeometries, chevyMaterial)).apply {
         position.set(x, -3.5f, z)
       }
     }
-    val heli = GameObject(*heliBodyGeometries.map { Mesh(heliMaterial, it) }.toTypedArray()).apply {
-      position.set(-45f, 0f, -90f)
-      yaw = 0.8f
-    }
-    gameObjects.add(heli)
-    // rotor hub positions in heli model space; tweak if they look off
-    gameObjects += GameObject(*heliMainRotorGeometries.map { Mesh(heliMaterial, it) }.toTypedArray()).apply {
-      position.set(0f, 15f, 4f)
-      parent = heli
-      move = object : GameObject.Motion(this) {
-        override operator fun invoke(dt : Float, t : Float, keysPressed : Set<String>,
-            interactors : ArrayList<GameObject>, spawn : ArrayList<GameObject>) : Boolean {
-          gameObject.yaw += dt * 10f
-          return true
-        }
-      }
-    }
-    gameObjects += GameObject(*heliTailRotorGeometries.map { Mesh(heliMaterial, it) }.toTypedArray()).apply {
-      position.set(0.8f, 15f, -38f)
-      parent = heli
-      move = object : GameObject.Motion(this) {
-        override operator fun invoke(dt : Float, t : Float, keysPressed : Set<String>,
-            interactors : ArrayList<GameObject>, spawn : ArrayList<GameObject>) : Boolean {
-          gameObject.pitch += dt * 20f
-          return true
-        }
-      }
-    }
-    gameObjects.add(GameObject(*exhibitGeometries.map { Mesh(envmappedMaterial, it) }.toTypedArray()))
-    val radius = 27f
-    for (i in 0 until 5) {
-      gameObjects += GameObject(*exhibitGeometries.map { Mesh(phongMaterial, it) }.toTypedArray()).apply{
-        val phi = i.toFloat() / 5f * PI.toFloat() * 2f
-        yaw = i.toFloat()
-        position.set(
-          cos(phi) * radius,
-          -10f,
-          sin(phi) * radius
-        )
+  }
+
+  fun resetBalls() {
+    gameObjects.removeAll { it is Ball }
+    for ((i, j, offset) in ballPlaces) {
+      val c = track.cellCenter(i, j)
+      gameObjects += Ball(5f, track, *meshes(sphereGeometries, ballMaterial)).apply {
+        position.x = c.x + offset
+        position.z = c.z + offset
       }
     }
   }
@@ -188,8 +157,58 @@ class Scene (
 
   val camera = PerspectiveCamera()
   val heliCam = HeliCam(camera, chassis)
-  val confusedCamera = PerspectiveCamera()  
-  var focalDistance = 15f
+
+  var raceTime = 0f
+  var finished = false
+  var message = ""
+  var messageTime = 0f
+
+  fun resetRace() {
+    chassis.reset(track.startCenter, startYaw)
+    heliCam.reset()
+    resetBalls()
+    raceTime = 0f
+    finished = false
+  }
+  init {
+    resetRace()
+  }
+
+  var overlayHtml = ""
+  fun updateOverlay() {
+    val time = raceTime.asDynamic().toFixed(1) as String
+    val html = if (finished) {
+      """<div style="font-size:36px">CÉL! Időd: $time s</div><div>R: új futam</div>"""
+    } else {
+      """<div style="font-size:24px">Idő: $time s</div>""" +
+      (if (messageTime > 0f) """<div style="font-size:24px;color:#f66">$message</div>""" else "") +
+      """<div>↑↓ gáz / fék &nbsp; ←→ kormány &nbsp; SPACE ugrás &nbsp; R újraindítás</div>"""
+    }
+    val styled = """<div style="color:white;font:bold 14px sans-serif;text-shadow:0 0 4px #000">$html</div>"""
+    if (styled != overlayHtml) {
+      overlayHtml = styled
+      overlay.innerHTML = styled
+    }
+  }
+
+  fun updateRace(dt : Float, keysPressed : Set<String>) {
+    if ("R" in keysPressed) {
+      resetRace()
+    }
+    if (chassis.position.y < groundY - 150f) {
+      resetRace()
+      message = "Leestél! Újra a rajttól."
+      messageTime = 2f
+    }
+    if (!finished) {
+      raceTime += dt
+      if (chassis.onGround && track.isFinish(chassis.position.x, chassis.position.z)) {
+        finished = true
+      }
+    }
+    messageTime -= dt
+    updateOverlay()
+  }
 
   val timeAtFirstFrame = Date().getTime()
   var timeAtLastFrame =  timeAtFirstFrame
@@ -198,47 +217,37 @@ class Scene (
     gl.enable(GL.DEPTH_TEST)
   }
 
-
   fun resize(gl : WebGL2RenderingContext, canvas : HTMLCanvasElement) {
     gl.viewport(0, 0, canvas.width, canvas.height)
     camera.setAspectRatio(canvas.width.toFloat() / canvas.height.toFloat())
-
-    defaultFramebuffer = DefaultFramebuffer(canvas.width, canvas.height)
-    // LABTODO: postProcFramebuffer, material
-    // LABTODO: fameBufferCube
   }
-
-  // LABTODO: cube cameras
 
   @Suppress("UNUSED_PARAMETER")
   fun update(gl : WebGL2RenderingContext, keysPressed : Set<String>, timeStamp : Double) {
-
-    val timeAtThisFrame = Date().getTime() 
-    // clamped so the stiff camera springs stay stable after a frame hiccup
+    val timeAtThisFrame = Date().getTime()
     val dt = min((timeAtThisFrame - timeAtLastFrame).toFloat() / 1000.0f, 0.05f)
     val t  = (timeAtThisFrame - timeAtFirstFrame).toFloat() / 1000.0f
     timeAtLastFrame = timeAtThisFrame
 
-    if(!keysPressed.isEmpty()){
-      frameCount = 0
-    }
-    frameCount = frameCount+1
-
-    // LABTODO: render to cube maps
-
-    // clear the screen
     gl.clearColor(0.3f, 0.0f, 0.3f, 1.0f)
     gl.clearDepth(1.0f)
 
     val spawn = ArrayList<GameObject>()
-    val killList = ArrayList<GameObject>()    
-    gameObjects.forEach { 
+    val killList = ArrayList<GameObject>()
+    gameObjects.forEach {
       if(!it.move(dt, t, keysPressed, gameObjects, spawn)){
         killList.add(it)
       }
     }
     killList.forEach{ gameObjects.remove(it) }
     spawn.forEach{ gameObjects.add(it) }
+    gameObjects.forEach {
+      if (it is Avatar) track.collideWithAvatar(it)
+      if (it is Ball) track.collideWithBall(it)
+    }
+
+    updateRace(dt, keysPressed)
+
     gameObjects.forEach { it.update() }
     heliCam.move(dt)
 

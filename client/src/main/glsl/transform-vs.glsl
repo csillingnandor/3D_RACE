@@ -4,7 +4,7 @@ in vec4 vertexTexCoord;
 in vec4 vertexNormal;
 in vec4 vertexTangent;
 in vec4 vertexBitangent;
-out vec4 texCoord; // passed to FS
+out vec4 texCoord;
 out vec4 worldPosition;
 out vec4 worldNormal;
 out vec4 worldTangent;
@@ -26,6 +26,5 @@ void main(void) {
 
   worldNormal = gameObject.modelMatrixInverse * vec4(vertexNormal.xyz, 0);
   worldTangent = vec4(vertexTangent.xyz, 0) * gameObject.modelMatrix;
-//  worldBitangent = vec4(vertexBitangent.xyz, 0) * gameObject.modelMatrix;
   texCoord = vertexTexCoord;
 }

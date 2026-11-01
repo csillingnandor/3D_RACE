@@ -5,13 +5,13 @@ import vision.gears.webglmath.*
 open class GameObject(vararg meshes : Mesh) : UniformProvider("gameObject") {
 
   val position = Vec3()
-  var roll = 0.0f 
+  var roll = 0.0f
   var yaw = 0.0f
-  var pitch = 0.0f     
-  val scale = Vec3(1.0f, 1.0f, 1.0f)  
+  var pitch = 0.0f
+  val scale = Vec3(1.0f, 1.0f, 1.0f)
 
   val modelMatrix by Mat4()
-  val modelMatrixInverse by Mat4()  
+  val modelMatrixInverse by Mat4()
 
   var parent : GameObject? = null
 
@@ -19,19 +19,21 @@ open class GameObject(vararg meshes : Mesh) : UniformProvider("gameObject") {
     addComponentsAndGatherUniforms(*meshes)
   }
 
-  open fun update(){
-    modelMatrix.set().
-      scale(scale).
-      rotate(roll).
+  open fun applyRotation(m : Mat4) {
+    m.rotate(roll).
       rotate(pitch, 1.0f, 0.0f, 0.0f).
-      rotate(yaw, 0.0f, 1.0f, 0.0f).
-      translate(position)
+      rotate(yaw, 0.0f, 1.0f, 0.0f)
+  }
+
+  fun update(){
+    modelMatrix.set().scale(scale)
+    applyRotation(modelMatrix)
+    modelMatrix.translate(position)
     parent?.let { parent ->
       parent.update()
       modelMatrix *= parent.modelMatrix
     }
     modelMatrixInverse.set(modelMatrix).invert()
-
   }
 
   open class Motion(val gameObject : GameObject){
@@ -47,4 +49,10 @@ open class GameObject(vararg meshes : Mesh) : UniformProvider("gameObject") {
   }
   var move = Motion(this)
 
+  fun motion(step : (dt : Float, keysPressed : Set<String>, interactors : ArrayList<GameObject>) -> Boolean) {
+    move = object : Motion(this) {
+      override operator fun invoke(dt : Float, t : Float, keysPressed : Set<String>,
+          interactors : ArrayList<GameObject>, spawn : ArrayList<GameObject>) = step(dt, keysPressed, interactors)
+    }
+  }
 }
